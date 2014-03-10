@@ -2,13 +2,14 @@ package robotExplorartion;
 
 import java.awt.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.swing.*;
 
 /**
- * A Simulation Program to test Multi-Robot Exploration of a Map
+ * A Simulation Program to test Multi-Robot Exploration of a Map, it is thread safe
  * @author Paul Monk
- * @version 20/01/2014
+ * @version 05/03/2014
  */
 
 public class Simulation extends JPanel
@@ -24,7 +25,8 @@ public class Simulation extends JPanel
 	//holds coordinate info, false means no obstacle, true means there is an obstacle present at that location
 	private boolean[][] originalCoordinates = new boolean[coordinatesX][coordinatesY];
 	//holds info on searched coordinates, false means no obstacle, true means there is an obstacle
-	private HashMap<Integer, HashMap<Integer, Boolean>> searchedCoordinates = new HashMap<Integer, HashMap<Integer, Boolean>>();
+	private ConcurrentHashMap<Integer, ConcurrentHashMap<Integer, PointStatusEnum>> searchedCoordinates = 
+			new ConcurrentHashMap<Integer, ConcurrentHashMap<Integer, PointStatusEnum>>();
 	//The robots
 	private Robot robot1;
 	//comment out
@@ -138,17 +140,17 @@ public class Simulation extends JPanel
 		}//for
 		
 		//paints the explored areas of the map
-		for (Map.Entry<Integer, HashMap<Integer, Boolean>> xCoordEntry : searchedCoordinates.entrySet())
+		for (Map.Entry<Integer, ConcurrentHashMap<Integer, PointStatusEnum>> xCoordEntry : searchedCoordinates.entrySet())
 		{
-			for (Map.Entry<Integer, Boolean> yCoordEntry : xCoordEntry.getValue().entrySet())
+			for (Map.Entry<Integer, PointStatusEnum> yCoordEntry : xCoordEntry.getValue().entrySet())
 			{
-				if(yCoordEntry.getValue() == null)//unexplored points painted gray
+				if(yCoordEntry.getValue() == PointStatusEnum.UNEXPLORED)//unexplored points painted gray
 				{
 					g2D.setColor(Color.gray);
 					g2D.fillRect(xCoordEntry.getKey()*pixelsPerSquare, yCoordEntry.getKey()*pixelsPerSquare, 
 								pixelsPerSquare, pixelsPerSquare);
 				}//if
-				else if(yCoordEntry.getValue())//obstacles painted pink
+				else if(yCoordEntry.getValue() == PointStatusEnum.OBSTACLE)//obstacles painted pink
 				{
 					g2D.setColor(Color.blue);
 					g2D.fillRect(xCoordEntry.getKey()*pixelsPerSquare, yCoordEntry.getKey()*pixelsPerSquare, 
@@ -201,8 +203,8 @@ public class Simulation extends JPanel
 		boolean loop = true;
 		int robotStartXCoord = (robotIn.getCoordinates().x)/pixelsPerSquare;
 		int robotStartYCoord = (robotIn.getCoordinates().y)/pixelsPerSquare;
-		searchedCoordinates.put(robotStartXCoord, new HashMap<Integer, Boolean>());
-		searchedCoordinates.get(robotStartXCoord).put(robotStartYCoord, false);
+		searchedCoordinates.put(robotStartXCoord, new ConcurrentHashMap<Integer, PointStatusEnum>());
+		searchedCoordinates.get(robotStartXCoord).put(robotStartYCoord, PointStatusEnum.OPEN);
 		int noOfSteps = 0;
 		boolean frontObstacle;
 		boolean leftObstacle;
@@ -260,7 +262,7 @@ public class Simulation extends JPanel
 				}//if
 			}//if
 			//comment out
-			else if(!leftObstacle && !previouslySearchedLeft)//if robot can turn left then it does
+			/*else if(!leftObstacle && !previouslySearchedLeft)//if robot can turn left then it does
 			{
 				if(robotIn.getDirection().equals(DirectionEnum.NORTH))
 				{
@@ -316,7 +318,7 @@ public class Simulation extends JPanel
 				{
 					nextPoint = new Point(robotXCoord, robotYCoord-1);
 				}//else
-			}//else if
+			}//else if*/
 			else//finds next closest unexplored point
 			{
 				Point closestUnexploredPoint = getClosestUnexploredPoint(new Point(robotXCoord, robotYCoord));
@@ -347,39 +349,54 @@ public class Simulation extends JPanel
 		
 		if(robotIn.getDirection().equals(DirectionEnum.NORTH))
 		{
-			if(searchedCoordinates.get(robotXCoord).get(robotYCoord-1) != null)//previously searched coordinate
+			if(!searchedCoordinates.get(robotXCoord).containsKey(robotYCoord-1))
+			{
+				//point doesn't exist yet
+			}//if
+			else if(searchedCoordinates.get(robotXCoord).get(robotYCoord-1) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
 			{
 				return true;
-			}//if
+			}//else if
 		}//if
 		else if(robotIn.getDirection().equals(DirectionEnum.EAST))
 		{
-			if(searchedCoordinates.get(robotXCoord+1) != null)//previously searched column
+			if(searchedCoordinates.containsKey(robotXCoord+1))//previously searched column
 			{
-				if(searchedCoordinates.get(robotXCoord+1).get(robotYCoord) != null)//previously searched coordinate
+				if(!searchedCoordinates.get(robotXCoord+1).containsKey(robotYCoord))
+				{
+					//point doesn't exist yet
+				}//if
+				else if(searchedCoordinates.get(robotXCoord+1).get(robotYCoord) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
 				{
 					return true;
-				}//if
+				}//else if
 			}//if
 			else//column hasn't been searched
 			{
 				//add a column to the coordinates list
-				searchedCoordinates.put(robotXCoord+1, new HashMap<Integer, Boolean>());
+				searchedCoordinates.put(robotXCoord+1, new ConcurrentHashMap<Integer, PointStatusEnum>());
 			}//else
 		}//else if
 		else if(robotIn.getDirection().equals(DirectionEnum.SOUTH))
 		{
-			//Check what is in front of the robot
-			if(searchedCoordinates.get(robotXCoord).get(robotYCoord+1) != null)//previously searched coordinate
+			if(!searchedCoordinates.get(robotXCoord).containsKey(robotYCoord+1))
+			{
+				//point doesn't exist yet
+			}//if
+			else if(searchedCoordinates.get(robotXCoord).get(robotYCoord+1) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
 			{
 				return true;
-			}//if
+			}//else if
 		}//else if
 		else//facing west
 		{
-			if(searchedCoordinates.get(robotXCoord-1) != null)//previously searched column
+			if(searchedCoordinates.containsKey(robotXCoord-1))//previously searched column
 			{
-				if(searchedCoordinates.get(robotXCoord-1).get(robotYCoord) != null)//previously searched coordinate
+				if(!searchedCoordinates.get(robotXCoord-1).containsKey(robotYCoord))
+				{
+					//point doesn't exist yet
+				}//if
+				else if(searchedCoordinates.get(robotXCoord-1).get(robotYCoord) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
 				{
 					return true;
 				}//if
@@ -387,7 +404,7 @@ public class Simulation extends JPanel
 			else//column hasn't been searched
 			{
 				//add a column to the coordinates list
-				searchedCoordinates.put(robotXCoord-1, new HashMap<Integer, Boolean>());
+				searchedCoordinates.put(robotXCoord-1, new ConcurrentHashMap<Integer, PointStatusEnum>());
 			}//else
 		}//else
 		
@@ -411,43 +428,43 @@ public class Simulation extends JPanel
 			if(originalCoordinates[robotXCoord][robotYCoord-1])//there is an obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord).put(robotYCoord-1, true);
+				searchedCoordinates.get(robotXCoord).put(robotYCoord-1, PointStatusEnum.OBSTACLE);
 				return true;
 			}//if
 			else//there is no obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord).put(robotYCoord-1, false);
+				searchedCoordinates.get(robotXCoord).put(robotYCoord-1, PointStatusEnum.OPEN);
 				
 				//add next unknown points if the don't already exist
 				if(!searchedCoordinates.get(robotXCoord).containsKey(robotYCoord-2))//check if point above exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord).put(robotYCoord-2, null);
+					searchedCoordinates.get(robotXCoord).put(robotYCoord-2, PointStatusEnum.UNEXPLORED);
 				}//if
 				if(!searchedCoordinates.containsKey(robotXCoord-1))//check if column to the left exists
 				{
 					//add new column
-					searchedCoordinates.put(robotXCoord-1, new HashMap<Integer, Boolean>());
+					searchedCoordinates.put(robotXCoord-1, new ConcurrentHashMap<Integer, PointStatusEnum>());
 					//add new point
-					searchedCoordinates.get(robotXCoord-1).put(robotYCoord-1, null);
+					searchedCoordinates.get(robotXCoord-1).put(robotYCoord-1, PointStatusEnum.UNEXPLORED);
 				}//if
 				else if(!searchedCoordinates.get(robotXCoord-1).containsKey(robotYCoord-1))//check if point to the left exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord-1).put(robotYCoord-1, null);
+					searchedCoordinates.get(robotXCoord-1).put(robotYCoord-1, PointStatusEnum.UNEXPLORED);
 				}//else if
 				if(!searchedCoordinates.containsKey(robotXCoord+1))//check if column to the right exists
 				{
 					//add new column
-					searchedCoordinates.put(robotXCoord+1, new HashMap<Integer, Boolean>());
+					searchedCoordinates.put(robotXCoord+1, new ConcurrentHashMap<Integer, PointStatusEnum>());
 					//add new point
-					searchedCoordinates.get(robotXCoord+1).put(robotYCoord-1, null);
+					searchedCoordinates.get(robotXCoord+1).put(robotYCoord-1, PointStatusEnum.UNEXPLORED);
 				}//if
 				else if(!searchedCoordinates.get(robotXCoord+1).containsKey(robotYCoord-1))//check if point to the right exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord+1).put(robotYCoord-1, null);
+					searchedCoordinates.get(robotXCoord+1).put(robotYCoord-1, PointStatusEnum.UNEXPLORED);
 				}//else if
 			}//else
 		}//if
@@ -456,37 +473,37 @@ public class Simulation extends JPanel
 			if(originalCoordinates[robotXCoord+1][robotYCoord])//there is an obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord+1).put(robotYCoord, true);
+				searchedCoordinates.get(robotXCoord+1).put(robotYCoord, PointStatusEnum.OBSTACLE);
 				return true;
 			}//if
 			else//there is no obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord+1).put(robotYCoord, false);
+				searchedCoordinates.get(robotXCoord+1).put(robotYCoord, PointStatusEnum.OPEN);
 
 				//add next unknown points if the don't already exist
 				if(!searchedCoordinates.get(robotXCoord+1).containsKey(robotYCoord-1))//check if point above exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord+1).put(robotYCoord-1, null);
+					searchedCoordinates.get(robotXCoord+1).put(robotYCoord-1, PointStatusEnum.UNEXPLORED);
 				}//if
 				//add next unknown points if the don't already exist
 				if(!searchedCoordinates.get(robotXCoord+1).containsKey(robotYCoord+1))//check if point below exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord+1).put(robotYCoord+1, null);
+					searchedCoordinates.get(robotXCoord+1).put(robotYCoord+1, PointStatusEnum.UNEXPLORED);
 				}//if
 				if(!searchedCoordinates.containsKey(robotXCoord+2))//check if column to the right exists
 				{
 					//add new column
-					searchedCoordinates.put(robotXCoord+2, new HashMap<Integer, Boolean>());
+					searchedCoordinates.put(robotXCoord+2, new ConcurrentHashMap<Integer, PointStatusEnum>());
 					//add new point
-					searchedCoordinates.get(robotXCoord+2).put(robotYCoord, null);
+					searchedCoordinates.get(robotXCoord+2).put(robotYCoord, PointStatusEnum.UNEXPLORED);
 				}//if
 				else if(!searchedCoordinates.get(robotXCoord+2).containsKey(robotYCoord))//check if point to the right exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord+2).put(robotYCoord, null);
+					searchedCoordinates.get(robotXCoord+2).put(robotYCoord, PointStatusEnum.UNEXPLORED);
 				}//else if
 			}//else
 		}//else if
@@ -495,43 +512,43 @@ public class Simulation extends JPanel
 			if(originalCoordinates[robotXCoord][robotYCoord+1])//there is an obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord).put(robotYCoord+1, true);
+				searchedCoordinates.get(robotXCoord).put(robotYCoord+1, PointStatusEnum.OBSTACLE);
 				return true;
 			}//if
 			else//there is no obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord).put(robotYCoord+1, false);
+				searchedCoordinates.get(robotXCoord).put(robotYCoord+1, PointStatusEnum.OPEN);
 				
 				//add next unknown points if the don't already exist
 				if(!searchedCoordinates.get(robotXCoord).containsKey(robotYCoord+2))//check if point below exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord).put(robotYCoord+2, null);
+					searchedCoordinates.get(robotXCoord).put(robotYCoord+2, PointStatusEnum.UNEXPLORED);
 				}//if
 				if(!searchedCoordinates.containsKey(robotXCoord-1))//check if column to the left exists
 				{
 					//add new column
-					searchedCoordinates.put(robotXCoord-1, new HashMap<Integer, Boolean>());
+					searchedCoordinates.put(robotXCoord-1, new ConcurrentHashMap<Integer, PointStatusEnum>());
 					//add new point
-					searchedCoordinates.get(robotXCoord-1).put(robotYCoord+1, null);
+					searchedCoordinates.get(robotXCoord-1).put(robotYCoord+1, PointStatusEnum.UNEXPLORED);
 				}//if
 				else if(!searchedCoordinates.get(robotXCoord-1).containsKey(robotYCoord+1))//check if point to the left exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord-1).put(robotYCoord+1, null);
+					searchedCoordinates.get(robotXCoord-1).put(robotYCoord+1, PointStatusEnum.UNEXPLORED);
 				}//else if
 				if(!searchedCoordinates.containsKey(robotXCoord+1))//check if column to the right exists
 				{
 					//add new column
-					searchedCoordinates.put(robotXCoord+1, new HashMap<Integer, Boolean>());
+					searchedCoordinates.put(robotXCoord+1, new ConcurrentHashMap<Integer, PointStatusEnum>());
 					//add new point
-					searchedCoordinates.get(robotXCoord+1).put(robotYCoord+1, null);
+					searchedCoordinates.get(robotXCoord+1).put(robotYCoord+1, PointStatusEnum.UNEXPLORED);
 				}//if
 				else if(!searchedCoordinates.get(robotXCoord+1).containsKey(robotYCoord+1))//check if point to the right exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord+1).put(robotYCoord+1, null);
+					searchedCoordinates.get(robotXCoord+1).put(robotYCoord+1, PointStatusEnum.UNEXPLORED);
 				}//else if
 			}//else
 		}//else if
@@ -540,37 +557,37 @@ public class Simulation extends JPanel
 			if(originalCoordinates[robotXCoord-1][robotYCoord])//there is an obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord-1).put(robotYCoord, true);
+				searchedCoordinates.get(robotXCoord-1).put(robotYCoord, PointStatusEnum.OBSTACLE);
 				return true;
 			}//if
 			else//there is no obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord-1).put(robotYCoord, false);
+				searchedCoordinates.get(robotXCoord-1).put(robotYCoord, PointStatusEnum.OPEN);
 				
 				//add next unknown points if the don't already exist
 				if(!searchedCoordinates.get(robotXCoord-1).containsKey(robotYCoord-1))//check if point above exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord-1).put(robotYCoord-1, null);
+					searchedCoordinates.get(robotXCoord-1).put(robotYCoord-1, PointStatusEnum.UNEXPLORED);
 				}//if
 				//add next unknown points if the don't already exist
 				if(!searchedCoordinates.get(robotXCoord-1).containsKey(robotYCoord+1))//check if point below exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord-1).put(robotYCoord+1, null);
+					searchedCoordinates.get(robotXCoord-1).put(robotYCoord+1, PointStatusEnum.UNEXPLORED);
 				}//if
 				if(!searchedCoordinates.containsKey(robotXCoord-2))//check if column to the left exists
 				{
 					//add new column
-					searchedCoordinates.put(robotXCoord-2, new HashMap<Integer, Boolean>());
+					searchedCoordinates.put(robotXCoord-2, new ConcurrentHashMap<Integer, PointStatusEnum>());
 					//add new point
-					searchedCoordinates.get(robotXCoord-2).put(robotYCoord, null);
+					searchedCoordinates.get(robotXCoord-2).put(robotYCoord, PointStatusEnum.UNEXPLORED);
 				}//if
 				else if(!searchedCoordinates.get(robotXCoord-2).containsKey(robotYCoord))//check if point to the left exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord-2).put(robotYCoord, null);
+					searchedCoordinates.get(robotXCoord-2).put(robotYCoord, PointStatusEnum.UNEXPLORED);
 				}//else if
 			}//else
 		}//else
@@ -591,47 +608,63 @@ public class Simulation extends JPanel
 		
 		if(robotIn.getDirection().equals(DirectionEnum.NORTH))
 		{
-			if(searchedCoordinates.get(robotXCoord-1) != null)//previously searched column
+			if(searchedCoordinates.containsKey(robotXCoord-1))//previously searched column
 			{
-				if(searchedCoordinates.get(robotXCoord-1).get(robotYCoord) != null)//previously searched coordinate
+				if(searchedCoordinates.get(robotXCoord-1).containsKey(robotYCoord))
+				{
+					//point doesn't exist yet
+				}//if
+				else if(searchedCoordinates.get(robotXCoord-1).get(robotYCoord) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
 				{
 					return true;
-				}//if
+				}//else if
 			}//if
 			else//column hasn't been searched
 			{
 				//add a column to the coordinates list
-				searchedCoordinates.put(robotXCoord-1, new HashMap<Integer, Boolean>());
+				searchedCoordinates.put(robotXCoord-1, new ConcurrentHashMap<Integer, PointStatusEnum>());
 			}//else
 		}//if
 		else if(robotIn.getDirection().equals(DirectionEnum.EAST))
 		{	
-			if(searchedCoordinates.get(robotXCoord).get(robotYCoord-1) != null)//previously searched coordinate
+			if(searchedCoordinates.get(robotXCoord).containsKey(robotYCoord-1))
+			{
+				//point doesn't exist yet
+			}//if
+			else if(searchedCoordinates.get(robotXCoord).get(robotYCoord-1) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
 			{
 				return true;
-			}//if
+			}//else if
 		}//else if
 		else if(robotIn.getDirection().equals(DirectionEnum.SOUTH))
 		{	
-			if(searchedCoordinates.get(robotXCoord+1) != null)//previously searched column
+			if(searchedCoordinates.containsKey(robotXCoord+1))//previously searched column
 			{
-				if(searchedCoordinates.get(robotXCoord+1).get(robotYCoord) != null)//previously searched coordinate
+				if(searchedCoordinates.get(robotXCoord+1).containsKey(robotYCoord))
+				{
+					///point doesn't exist yet
+				}//if
+				else if(searchedCoordinates.get(robotXCoord+1).get(robotYCoord) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
 				{
 					return true;
-				}//if
+				}//else if
 			}//if
 			else//column hasn't been searched
 			{
 				//add a column to the coordinates list
-				searchedCoordinates.put(robotXCoord+1, new HashMap<Integer, Boolean>());
+				searchedCoordinates.put(robotXCoord+1, new ConcurrentHashMap<Integer, PointStatusEnum>());
 			}//else
 		}//else if
 		else//facing west
 		{	
-			if(searchedCoordinates.get(robotXCoord).get(robotYCoord+1) != null)//previously searched coordinate
+			if(searchedCoordinates.get(robotXCoord).containsKey(robotYCoord+1))
+			{
+				//point doesn't exist yet
+			}//if
+			else if(searchedCoordinates.get(robotXCoord).get(robotYCoord+1) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
 			{
 				return true;
-			}//if
+			}//else if
 		}//else
 		
 		//coordinate hasn't bee searched previously
@@ -654,37 +687,37 @@ public class Simulation extends JPanel
 			if(originalCoordinates[robotXCoord-1][robotYCoord])//there is an obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord-1).put(robotYCoord, true);
+				searchedCoordinates.get(robotXCoord-1).put(robotYCoord, PointStatusEnum.OBSTACLE);
 				return true;
 			}//if
 			else//there is no obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord-1).put(robotYCoord, false);
+				searchedCoordinates.get(robotXCoord-1).put(robotYCoord, PointStatusEnum.OPEN);
 				
 				//add next unknown points if the don't already exist
 				if(!searchedCoordinates.get(robotXCoord-1).containsKey(robotYCoord-1))//check if point above exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord-1).put(robotYCoord-1, null);
+					searchedCoordinates.get(robotXCoord-1).put(robotYCoord-1, PointStatusEnum.UNEXPLORED);
 				}//if
 				//add next unknown points if the don't already exist
 				if(!searchedCoordinates.get(robotXCoord-1).containsKey(robotYCoord+1))//check if point below exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord-1).put(robotYCoord+1, null);
+					searchedCoordinates.get(robotXCoord-1).put(robotYCoord+1, PointStatusEnum.UNEXPLORED);
 				}//if
 				if(!searchedCoordinates.containsKey(robotXCoord-2))//check if column to the left exists
 				{
 					//add new column
-					searchedCoordinates.put(robotXCoord-2, new HashMap<Integer, Boolean>());
+					searchedCoordinates.put(robotXCoord-2, new ConcurrentHashMap<Integer, PointStatusEnum>());
 					//add new point
-					searchedCoordinates.get(robotXCoord-2).put(robotYCoord, null);
+					searchedCoordinates.get(robotXCoord-2).put(robotYCoord, PointStatusEnum.UNEXPLORED);
 				}//if
 				else if(!searchedCoordinates.get(robotXCoord-2).containsKey(robotYCoord))//check if point to the left exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord-2).put(robotYCoord, null);
+					searchedCoordinates.get(robotXCoord-2).put(robotYCoord, PointStatusEnum.UNEXPLORED);
 				}//else if
 			}//else
 		}//if
@@ -693,43 +726,43 @@ public class Simulation extends JPanel
 			if(originalCoordinates[robotXCoord][robotYCoord-1])//there is an obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord).put(robotYCoord-1, true);
+				searchedCoordinates.get(robotXCoord).put(robotYCoord-1, PointStatusEnum.OBSTACLE);
 				return true;
 			}//if
 			else//there is no obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord).put(robotYCoord-1, false);
+				searchedCoordinates.get(robotXCoord).put(robotYCoord-1, PointStatusEnum.OPEN);
 				
 				//add next unknown points if the don't already exist
 				if(!searchedCoordinates.get(robotXCoord).containsKey(robotYCoord-2))//check if point above exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord).put(robotYCoord-2, null);
+					searchedCoordinates.get(robotXCoord).put(robotYCoord-2, PointStatusEnum.UNEXPLORED);
 				}//if
 				if(!searchedCoordinates.containsKey(robotXCoord-1))//check if column to the left exists
 				{
 					//add new column
-					searchedCoordinates.put(robotXCoord-1, new HashMap<Integer, Boolean>());
+					searchedCoordinates.put(robotXCoord-1, new ConcurrentHashMap<Integer, PointStatusEnum>());
 					//add new point
-					searchedCoordinates.get(robotXCoord-1).put(robotYCoord-1, null);
+					searchedCoordinates.get(robotXCoord-1).put(robotYCoord-1, PointStatusEnum.UNEXPLORED);
 				}//if
 				else if(!searchedCoordinates.get(robotXCoord-1).containsKey(robotYCoord-1))//check if point to the left exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord-1).put(robotYCoord-1, null);
+					searchedCoordinates.get(robotXCoord-1).put(robotYCoord-1, PointStatusEnum.UNEXPLORED);
 				}//else if
 				if(!searchedCoordinates.containsKey(robotXCoord+1))//check if column to the right exists
 				{
 					//add new column
-					searchedCoordinates.put(robotXCoord+1, new HashMap<Integer, Boolean>());
+					searchedCoordinates.put(robotXCoord+1, new ConcurrentHashMap<Integer, PointStatusEnum>());
 					//add new point
-					searchedCoordinates.get(robotXCoord+1).put(robotYCoord-1, null);
+					searchedCoordinates.get(robotXCoord+1).put(robotYCoord-1, PointStatusEnum.UNEXPLORED);
 				}//if
 				else if(!searchedCoordinates.get(robotXCoord+1).containsKey(robotYCoord-1))//check if point to the right exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord+1).put(robotYCoord-1, null);
+					searchedCoordinates.get(robotXCoord+1).put(robotYCoord-1, PointStatusEnum.UNEXPLORED);
 				}//else if
 			}//else
 		}//else if
@@ -738,37 +771,37 @@ public class Simulation extends JPanel
 			if(originalCoordinates[robotXCoord+1][robotYCoord])//there is an obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord+1).put(robotYCoord, true);
+				searchedCoordinates.get(robotXCoord+1).put(robotYCoord, PointStatusEnum.OBSTACLE);
 				return true;
 			}//if
 			else//there is no obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord+1).put(robotYCoord, false);
+				searchedCoordinates.get(robotXCoord+1).put(robotYCoord, PointStatusEnum.OPEN);
 				
 				//add next unknown points if the don't already exist
 				if(!searchedCoordinates.get(robotXCoord+1).containsKey(robotYCoord-1))//check if point above exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord+1).put(robotYCoord-1, null);
+					searchedCoordinates.get(robotXCoord+1).put(robotYCoord-1, PointStatusEnum.UNEXPLORED);
 				}//if
 				//add next unknown points if the don't already exist
 				if(!searchedCoordinates.get(robotXCoord+1).containsKey(robotYCoord+1))//check if point below exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord+1).put(robotYCoord+1, null);
+					searchedCoordinates.get(robotXCoord+1).put(robotYCoord+1, PointStatusEnum.UNEXPLORED);
 				}//if
 				if(!searchedCoordinates.containsKey(robotXCoord+2))//check if column to the right exists
 				{
 					//add new column
-					searchedCoordinates.put(robotXCoord+2, new HashMap<Integer, Boolean>());
+					searchedCoordinates.put(robotXCoord+2, new ConcurrentHashMap<Integer, PointStatusEnum>());
 					//add new point
-					searchedCoordinates.get(robotXCoord+2).put(robotYCoord, null);
+					searchedCoordinates.get(robotXCoord+2).put(robotYCoord, PointStatusEnum.UNEXPLORED);
 				}//if
 				else if(!searchedCoordinates.get(robotXCoord+2).containsKey(robotYCoord))//check if point to the right exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord+2).put(robotYCoord, null);
+					searchedCoordinates.get(robotXCoord+2).put(robotYCoord, PointStatusEnum.UNEXPLORED);
 				}//else if
 			}//else
 		}//else if
@@ -777,43 +810,43 @@ public class Simulation extends JPanel
 			if(originalCoordinates[robotXCoord][robotYCoord+1])//there is an obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord).put(robotYCoord+1, true);
+				searchedCoordinates.get(robotXCoord).put(robotYCoord+1, PointStatusEnum.OBSTACLE);
 				return true;
 			}//if
 			else//there is no obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord).put(robotYCoord+1, false);
+				searchedCoordinates.get(robotXCoord).put(robotYCoord+1, PointStatusEnum.OPEN);
 				
 				//add next unknown points if the don't already exist
 				if(!searchedCoordinates.get(robotXCoord).containsKey(robotYCoord+2))//check if point below exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord).put(robotYCoord+2, null);
+					searchedCoordinates.get(robotXCoord).put(robotYCoord+2, PointStatusEnum.UNEXPLORED);
 				}//if
 				if(!searchedCoordinates.containsKey(robotXCoord-1))//check if column to the left exists
 				{
 					//add new column
-					searchedCoordinates.put(robotXCoord-1, new HashMap<Integer, Boolean>());
+					searchedCoordinates.put(robotXCoord-1, new ConcurrentHashMap<Integer, PointStatusEnum>());
 					//add new point
-					searchedCoordinates.get(robotXCoord-1).put(robotYCoord+1, null);
+					searchedCoordinates.get(robotXCoord-1).put(robotYCoord+1, PointStatusEnum.UNEXPLORED);
 				}//if
 				else if(!searchedCoordinates.get(robotXCoord-1).containsKey(robotYCoord+1))//check if point to the left exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord-1).put(robotYCoord+1, null);
+					searchedCoordinates.get(robotXCoord-1).put(robotYCoord+1, PointStatusEnum.UNEXPLORED);
 				}//else if
 				if(!searchedCoordinates.containsKey(robotXCoord+1))//check if column to the right exists
 				{
 					//add new column
-					searchedCoordinates.put(robotXCoord+1, new HashMap<Integer, Boolean>());
+					searchedCoordinates.put(robotXCoord+1, new ConcurrentHashMap<Integer, PointStatusEnum>());
 					//add new point
-					searchedCoordinates.get(robotXCoord+1).put(robotYCoord+1, null);
+					searchedCoordinates.get(robotXCoord+1).put(robotYCoord+1, PointStatusEnum.UNEXPLORED);
 				}//if
 				else if(!searchedCoordinates.get(robotXCoord+1).containsKey(robotYCoord+1))//check if point to the right exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord+1).put(robotYCoord+1, null);
+					searchedCoordinates.get(robotXCoord+1).put(robotYCoord+1, PointStatusEnum.UNEXPLORED);
 				}//else if
 			}//else
 		}//else
@@ -834,47 +867,63 @@ public class Simulation extends JPanel
 		
 		if(robotIn.getDirection().equals(DirectionEnum.NORTH))
 		{
-			if(searchedCoordinates.get(robotXCoord+1) != null)//previously searched column
+			if(searchedCoordinates.containsKey(robotXCoord+1))//previously searched column
 			{
-				if(searchedCoordinates.get(robotXCoord+1).get(robotYCoord) != null)//previously searched coordinate
+				if(searchedCoordinates.get(robotXCoord+1).containsKey(robotYCoord))
+				{
+					//point doesn't exist yet
+				}//if
+				else if(searchedCoordinates.get(robotXCoord+1).get(robotYCoord) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
 				{
 					return true;
-				}//if
+				}//else if
 			}//if
 			else//column hasn't been searched
 			{
 				//add a column to the coordinates list
-				searchedCoordinates.put(robotXCoord+1, new HashMap<Integer, Boolean>());
+				searchedCoordinates.put(robotXCoord+1, new ConcurrentHashMap<Integer, PointStatusEnum>());
 			}//else
 		}//if
 		else if(robotIn.getDirection().equals(DirectionEnum.EAST))
 		{	
-			if(searchedCoordinates.get(robotXCoord).get(robotYCoord+1) != null)//previously searched coordinate
+			if(searchedCoordinates.get(robotXCoord).containsKey(robotYCoord+1))
+			{
+				//point doesn't exist yet
+			}//if
+			else if(searchedCoordinates.get(robotXCoord).get(robotYCoord+1) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
 			{
 				return true;
-			}//if
+			}//else if
 		}//else if
 		else if(robotIn.getDirection().equals(DirectionEnum.SOUTH))
 		{	
-			if(searchedCoordinates.get(robotXCoord-1) != null)//previously searched column
+			if(searchedCoordinates.containsKey(robotXCoord-1))//previously searched column
 			{
-				if(searchedCoordinates.get(robotXCoord-1).get(robotYCoord) != null)//previously searched coordinate
+				if(searchedCoordinates.get(robotXCoord-1).containsKey(robotYCoord))
+				{
+					//point doesn't exist yet
+				}//if
+				else if(searchedCoordinates.get(robotXCoord-1).get(robotYCoord) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
 				{
 					return true;
-				}//if
+				}//else if
 			}//if
 			else//column hasn't been searched
 			{
 				//add a column to the coordinates list
-				searchedCoordinates.put(robotXCoord-1, new HashMap<Integer, Boolean>());
+				searchedCoordinates.put(robotXCoord-1, new ConcurrentHashMap<Integer, PointStatusEnum>());
 			}//else
 		}//else if
 		else//facing west
 		{	
-			if(searchedCoordinates.get(robotXCoord).get(robotYCoord-1) != null)//previously searched coordinate
+			if(searchedCoordinates.get(robotXCoord).containsKey(robotYCoord-1))
+			{
+				//point doesn't exist yet
+			}//if
+			else if(searchedCoordinates.get(robotXCoord).get(robotYCoord-1) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
 			{
 				return true;
-			}//if
+			}//else if
 		}//else
 		
 		//coordinate not previously searched
@@ -897,37 +946,37 @@ public class Simulation extends JPanel
 			if(originalCoordinates[robotXCoord+1][robotYCoord])//there is an obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord+1).put(robotYCoord, true);
+				searchedCoordinates.get(robotXCoord+1).put(robotYCoord, PointStatusEnum.OBSTACLE);
 				return true;
 			}//if
 			else//there is no obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord+1).put(robotYCoord, false);
+				searchedCoordinates.get(robotXCoord+1).put(robotYCoord, PointStatusEnum.OPEN);
 				
 				//add next unknown points if the don't already exist
 				if(!searchedCoordinates.get(robotXCoord+1).containsKey(robotYCoord-1))//check if point above exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord+1).put(robotYCoord-1, null);
+					searchedCoordinates.get(robotXCoord+1).put(robotYCoord-1, PointStatusEnum.UNEXPLORED);
 				}//if
 				//add next unknown points if the don't already exist
 				if(!searchedCoordinates.get(robotXCoord+1).containsKey(robotYCoord+1))//check if point below exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord+1).put(robotYCoord+1, null);
+					searchedCoordinates.get(robotXCoord+1).put(robotYCoord+1, PointStatusEnum.UNEXPLORED);
 				}//if
 				if(!searchedCoordinates.containsKey(robotXCoord+2))//check if column to the right exists
 				{
 					//add new column
-					searchedCoordinates.put(robotXCoord+2, new HashMap<Integer, Boolean>());
+					searchedCoordinates.put(robotXCoord+2, new ConcurrentHashMap<Integer, PointStatusEnum>());
 					//add new point
-					searchedCoordinates.get(robotXCoord+2).put(robotYCoord, null);
+					searchedCoordinates.get(robotXCoord+2).put(robotYCoord, PointStatusEnum.UNEXPLORED);
 				}//if
 				else if(!searchedCoordinates.get(robotXCoord+2).containsKey(robotYCoord))//check if point to the right exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord+2).put(robotYCoord, null);
+					searchedCoordinates.get(robotXCoord+2).put(robotYCoord, PointStatusEnum.UNEXPLORED);
 				}//else if
 			}//else
 		}//if
@@ -936,43 +985,43 @@ public class Simulation extends JPanel
 			if(originalCoordinates[robotXCoord][robotYCoord+1])//there is an obstacle
 			{
 				//add to searched coordinates list;
-				searchedCoordinates.get(robotXCoord).put(robotYCoord+1, true);
+				searchedCoordinates.get(robotXCoord).put(robotYCoord+1, PointStatusEnum.OBSTACLE);
 				return true;
 			}//if
 			else//there is no obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord).put(robotYCoord+1, false);
+				searchedCoordinates.get(robotXCoord).put(robotYCoord+1, PointStatusEnum.OPEN);
 				
 				//add next unknown points if the don't already exist
 				if(!searchedCoordinates.get(robotXCoord).containsKey(robotYCoord+2))//check if point below exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord).put(robotYCoord+2, null);
+					searchedCoordinates.get(robotXCoord).put(robotYCoord+2, PointStatusEnum.UNEXPLORED);
 				}//if
 				if(!searchedCoordinates.containsKey(robotXCoord-1))//check if column to the left exists
 				{
 					//add new column
-					searchedCoordinates.put(robotXCoord-1, new HashMap<Integer, Boolean>());
+					searchedCoordinates.put(robotXCoord-1, new ConcurrentHashMap<Integer, PointStatusEnum>());
 					//add new point
-					searchedCoordinates.get(robotXCoord-1).put(robotYCoord+1, null);
+					searchedCoordinates.get(robotXCoord-1).put(robotYCoord+1, PointStatusEnum.UNEXPLORED);
 				}//if
 				else if(!searchedCoordinates.get(robotXCoord-1).containsKey(robotYCoord+1))//check if point to the left exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord-1).put(robotYCoord+1, null);
+					searchedCoordinates.get(robotXCoord-1).put(robotYCoord+1, PointStatusEnum.UNEXPLORED);
 				}//else if
 				if(!searchedCoordinates.containsKey(robotXCoord+1))//check if column to the right exists
 				{
 					//add new column
-					searchedCoordinates.put(robotXCoord+1, new HashMap<Integer, Boolean>());
+					searchedCoordinates.put(robotXCoord+1, new ConcurrentHashMap<Integer, PointStatusEnum>());
 					//add new point
-					searchedCoordinates.get(robotXCoord+1).put(robotYCoord+1, null);
+					searchedCoordinates.get(robotXCoord+1).put(robotYCoord+1, PointStatusEnum.UNEXPLORED);
 				}//if
 				else if(!searchedCoordinates.get(robotXCoord+1).containsKey(robotYCoord+1))//check if point to the right exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord+1).put(robotYCoord+1, null);
+					searchedCoordinates.get(robotXCoord+1).put(robotYCoord+1, PointStatusEnum.UNEXPLORED);
 				}//else if
 			}//else
 		}//else if
@@ -982,37 +1031,37 @@ public class Simulation extends JPanel
 			if(originalCoordinates[robotXCoord-1][robotYCoord])//there is an obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord-1).put(robotYCoord, true);
+				searchedCoordinates.get(robotXCoord-1).put(robotYCoord, PointStatusEnum.OBSTACLE);
 				return true;
 			}//if
 			else//there is no obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord-1).put(robotYCoord, false);
+				searchedCoordinates.get(robotXCoord-1).put(robotYCoord, PointStatusEnum.OPEN);
 				
 				//add next unknown points if the don't already exist
 				if(!searchedCoordinates.get(robotXCoord-1).containsKey(robotYCoord-1))//check if point above exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord-1).put(robotYCoord-1, null);
+					searchedCoordinates.get(robotXCoord-1).put(robotYCoord-1, PointStatusEnum.UNEXPLORED);
 				}//if
 				//add next unknown points if the don't already exist
 				if(!searchedCoordinates.get(robotXCoord-1).containsKey(robotYCoord+1))//check if point below exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord-1).put(robotYCoord+1, null);
+					searchedCoordinates.get(robotXCoord-1).put(robotYCoord+1, PointStatusEnum.UNEXPLORED);
 				}//if
 				if(!searchedCoordinates.containsKey(robotXCoord-2))//check if column to the left exists
 				{
 					//add new column
-					searchedCoordinates.put(robotXCoord-2, new HashMap<Integer, Boolean>());
+					searchedCoordinates.put(robotXCoord-2, new ConcurrentHashMap<Integer, PointStatusEnum>());
 					//add new point
-					searchedCoordinates.get(robotXCoord-2).put(robotYCoord, null);
+					searchedCoordinates.get(robotXCoord-2).put(robotYCoord, PointStatusEnum.UNEXPLORED);
 				}//if
 				else if(!searchedCoordinates.get(robotXCoord-2).containsKey(robotYCoord))//check if point to the left exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord-2).put(robotYCoord, null);
+					searchedCoordinates.get(robotXCoord-2).put(robotYCoord, PointStatusEnum.UNEXPLORED);
 				}//else if
 			}//else
 		}//else if
@@ -1021,43 +1070,43 @@ public class Simulation extends JPanel
 			if(originalCoordinates[robotXCoord][robotYCoord-1])//there is an obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord).put(robotYCoord-1, true);
+				searchedCoordinates.get(robotXCoord).put(robotYCoord-1, PointStatusEnum.OBSTACLE);
 				return true;
 			}//if
 			else//there is no obstacle
 			{
 				//add to searched coordinates list
-				searchedCoordinates.get(robotXCoord).put(robotYCoord-1, false);
+				searchedCoordinates.get(robotXCoord).put(robotYCoord-1, PointStatusEnum.OPEN);
 				
 				//add next unknown points if the don't already exist
 				if(!searchedCoordinates.get(robotXCoord).containsKey(robotYCoord-2))//check if point above exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord).put(robotYCoord-2, null);
+					searchedCoordinates.get(robotXCoord).put(robotYCoord-2, PointStatusEnum.UNEXPLORED);
 				}//if
 				if(!searchedCoordinates.containsKey(robotXCoord-1))//check if column to the left exists
 				{
 					//add new column
-					searchedCoordinates.put(robotXCoord-1, new HashMap<Integer, Boolean>());
+					searchedCoordinates.put(robotXCoord-1, new ConcurrentHashMap<Integer, PointStatusEnum>());
 					//add new point
-					searchedCoordinates.get(robotXCoord-1).put(robotYCoord-1, null);
+					searchedCoordinates.get(robotXCoord-1).put(robotYCoord-1, PointStatusEnum.UNEXPLORED);
 				}//if
 				else if(!searchedCoordinates.get(robotXCoord-1).containsKey(robotYCoord-1))//check if point to the left exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord-1).put(robotYCoord-1, null);
+					searchedCoordinates.get(robotXCoord-1).put(robotYCoord-1, PointStatusEnum.UNEXPLORED);
 				}//else if
 				if(!searchedCoordinates.containsKey(robotXCoord+1))//check if column to the right exists
 				{
 					//add new column
-					searchedCoordinates.put(robotXCoord+1, new HashMap<Integer, Boolean>());
+					searchedCoordinates.put(robotXCoord+1, new ConcurrentHashMap<Integer, PointStatusEnum>());
 					//add new point
-					searchedCoordinates.get(robotXCoord+1).put(robotYCoord-1, null);
+					searchedCoordinates.get(robotXCoord+1).put(robotYCoord-1, PointStatusEnum.UNEXPLORED);
 				}//if
 				else if(!searchedCoordinates.get(robotXCoord+1).containsKey(robotYCoord-1))//check if point to the right exists
 				{
 					//add new point
-					searchedCoordinates.get(robotXCoord+1).put(robotYCoord-1, null);
+					searchedCoordinates.get(robotXCoord+1).put(robotYCoord-1, PointStatusEnum.UNEXPLORED);
 				}//else if
 			}//else
 		}//else
@@ -1197,18 +1246,18 @@ public class Simulation extends JPanel
 	 * @param currentPositionIn The robots current position
 	 * @return The coordinates of the closest unexplored point
 	 */
-	public synchronized Point getClosestUnexploredPoint(Point currentPositionIn)
+	public Point getClosestUnexploredPoint(Point currentPositionIn)
 	{
 		Point closestUnexploredPoint = null;
 		int distance = Integer.MAX_VALUE;
 		int xCoordKey = -1;
 		int yCoordKey = -1;
 		
-		for (Map.Entry<Integer, HashMap<Integer, Boolean>> xCoordEntry : searchedCoordinates.entrySet())
+		for (Map.Entry<Integer, ConcurrentHashMap<Integer, PointStatusEnum>> xCoordEntry : searchedCoordinates.entrySet())
 		{
-			for (Map.Entry<Integer, Boolean> yCoordEntry : xCoordEntry.getValue().entrySet())
+			for (Map.Entry<Integer, PointStatusEnum> yCoordEntry : xCoordEntry.getValue().entrySet())
 			{
-				if(yCoordEntry.getValue() == null)//if point hasn't been explored
+				if(yCoordEntry.getValue() == PointStatusEnum.UNEXPLORED)//if point hasn't been explored
 				{
 					int currentDistance = Math.abs(currentPositionIn.x - xCoordEntry.getKey()) + 
 										Math.abs(currentPositionIn.y - yCoordEntry.getKey());
@@ -1226,9 +1275,11 @@ public class Simulation extends JPanel
 		}//for
 		
 		//comment out
+		//Allows the robots to tell each other which square they are going to next
+		//by setting it as an obstacle it makes sure the other robot won't try and search it as well
 		if(xCoordKey != -1 && yCoordKey != -1)
 		{
-			searchedCoordinates.get(xCoordKey).put(yCoordKey, true);
+			searchedCoordinates.get(xCoordKey).put(yCoordKey, PointStatusEnum.OBSTACLE);
 		}//if
 		
 		return closestUnexploredPoint;
@@ -1269,7 +1320,7 @@ public class Simulation extends JPanel
 			if(openCoordinates.isEmpty())
 			{
 				//set target point as an obstacle (so it won't be searched for again)
-				searchedCoordinates.get(targetPointIn.x).put(targetPointIn.y, true);
+				searchedCoordinates.get(targetPointIn.x).put(targetPointIn.y, PointStatusEnum.OBSTACLE);
 				return null;
 			}//if
 			
@@ -1399,15 +1450,19 @@ public class Simulation extends JPanel
 					currentPointIn.getGScore()+gScoreIn, 0);
 			openCoordinatesIn.add(0, coord);
 		}//if
-		else if(searchedCoordinates.get(pointToCheckIn.x) == null)
+		else if(!searchedCoordinates.containsKey(pointToCheckIn.x))
 		{
 			//column hasn't been searched so point doesn't exist yet, ignore it
 		}//if
-		else if(searchedCoordinates.get(pointToCheckIn.x).get(pointToCheckIn.y) == null)
+		else if(!searchedCoordinates.get(pointToCheckIn.x).containsKey(pointToCheckIn.y))
 		{
 			//no point there so ignore it
 		}//if
-		else if(searchedCoordinates.get(pointToCheckIn.x).get(pointToCheckIn.y) == false)//no obstacle at that point
+		else if(searchedCoordinates.get(pointToCheckIn.x).get(pointToCheckIn.y) == PointStatusEnum.UNEXPLORED)
+		{
+			//unexplored point so ignore it
+		}//if
+		else if(searchedCoordinates.get(pointToCheckIn.x).get(pointToCheckIn.y) == PointStatusEnum.OPEN)//no obstacle at that point
 		{
 			//check if point is in the closed list
 			for(int a=0; a<closedCoordinatesIn.size(); a++)
