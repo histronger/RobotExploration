@@ -9,16 +9,16 @@ import javax.swing.*;
 /**
  * A Simulation Program to test Multi-Robot Exploration of a Map, it is thread safe
  * @author Paul Monk
- * @version 05/03/2014
+ * @version 12/03/2014
  */
 
 public class Simulation extends JPanel
 {
 	//Size of the simulation frame in pixels
-	private final int frameWidth = 1000;
-	private final int frameHeight = 700;
+	private final int frameWidth = 750;
+	private final int frameHeight = 525;
 	//The number of pixels per square of the map
-	private final int pixelsPerSquare = 20;
+	private final int pixelsPerSquare = 15;
 	//The coordinates of the map, worked out according to how many pixels there are per square
 	private final int coordinatesX = (frameWidth/pixelsPerSquare);
 	private final int coordinatesY = (frameHeight/pixelsPerSquare) - 2;
@@ -29,22 +29,36 @@ public class Simulation extends JPanel
 			new ConcurrentHashMap<Integer, ConcurrentHashMap<Integer, PointStatusEnum>>();
 	//The robots
 	private Robot robot1;
-	//comment out
 	private Robot robot2;
 	//The number of the thread this program is running on (used when several versions are running at once)
 	int threadNumber;
 	//used for buffering the graphics
 	private Image bufferImage; 
 	private Graphics bufferGraphics;
+	//Thread to run the simulation
+	private Thread thread1;
+	private Thread thread2;
+	
+	private boolean twoRobots;
+	private boolean coordinated;
+	private int obstacleProbability;
 	
 	/**
 	 * Sets up and starts the Simulation, creating the map and positioning the robots 
 	 * then making the threads for each robot and running them
-	 * @param threadNumberIn The number of the thread this program is running on (used when several versions are running at once)
+	 * @param threadNumberIn The number of this thread (to distinguish between different simulations running at the same time)
+	 * @param proprietaryAlgorithmIn which exploration algorithm should be used (true for proprietary, false for frontier)
+	 * @param twoRobotsIn True if 2 robots are running in the simulation, false if just 1 robot is running
+	 * @param coordinatedIn True if the robots will coordinate with each other in the simulation, false otherwise
+	 * @param obstacleProbabilityIn The chance of obstacles occurring (0-100%)
 	 */
-	public Simulation(int threadNumberIn)
+	public Simulation(int threadNumberIn, boolean proprietaryAlgorithmIn, boolean twoRobotsIn,
+			boolean coordinatedIn, int obstacleProbabilityIn)
 	{	
 		threadNumber = threadNumberIn;
+		twoRobots = twoRobotsIn;
+		coordinated = coordinatedIn;
+		obstacleProbability = obstacleProbabilityIn;
 		
 		//Makes left and right of screen an obstacle
 		for(int a=0; a<coordinatesX; a++)
@@ -66,23 +80,26 @@ public class Simulation extends JPanel
 		{
 			for(int b=1; b<coordinatesY-1; b++)
 			{
-				if(rnd.nextInt(100) == 0)
+				if(rnd.nextInt(100/obstacleProbability) == 0)
 				{
 					originalCoordinates[a][b] = true;
 				}//if
 			}//for
 		}//for
 		
-		robot1 = new Robot("Robot 1", new Point(20, 20), pixelsPerSquare, DirectionEnum.SOUTH);
-		//comment out
-		robot2 = new Robot("Robot 2", new Point(960, 620), pixelsPerSquare, DirectionEnum.SOUTH);
+		//creates the robots
+			robot1 = new Robot("Robot 1", new Point(15, 15), pixelsPerSquare, DirectionEnum.SOUTH);
+		if(twoRobots)
+		{
+			robot2 = new Robot("Robot 2", new Point(720, 465), pixelsPerSquare, DirectionEnum.NORTH);
+		}//if
 		
 		JFrame frame = new JFrame();
-		frame.setSize(frameWidth, frameHeight);
+		frame.setSize(frameWidth+250, frameHeight);
 		frame.setResizable(false);
-		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 		frame.setTitle("Simulation - Robot Exploration");
-		frame.setLocation(100,100);
+		frame.setLocationRelativeTo(null);
 		
 		JScrollPane scrollPane = new JScrollPane(this);
 		scrollPane.setSize(frame.getHeight(), frame.getWidth());
@@ -91,13 +108,25 @@ public class Simulation extends JPanel
 		frame.setVisible(true);
 		frame.requestFocus();
 
-		Thread thread1 = new Thread(new SimulationLoopThread(robot1));
-		//comment out
-		Thread thread2 = new Thread(new SimulationLoopThread(robot2));
-		thread1.start();
-		//comment out
-		thread2.start();
+		//creates the simulation threads
+		thread1 = new Thread(new SimulationLoopThread(robot1, proprietaryAlgorithmIn));
+		if(twoRobots)
+		{
+			thread2 = new Thread(new SimulationLoopThread(robot2, proprietaryAlgorithmIn));
+		}//if
 	}//constructor
+	
+	/**
+	 * Starts the simulation
+	 */
+	public void startSimulation()
+	{
+		thread1.start();
+		if(twoRobots)
+		{
+			thread2.start();
+		}//if
+	}//startSimulation
 	
 	/**
 	 * Prints out the number of steps a robot has travelled, once it has finished exploring
@@ -166,8 +195,61 @@ public class Simulation extends JPanel
 		}//for
 		
 		robot1.paint(g);
-		//comment out
-		robot2.paint(g);
+		if(twoRobots)
+		{
+			robot2.paint(g);
+		}//if
+		
+		//writes information at the right hand side of the window
+		g2D.setFont(new Font("SansSerif", Font.BOLD, 16));
+		g2D.setColor(Color.red);
+		g2D.fillRect(760, 13, 20, 20);
+		g2D.setColor(Color.black);
+		g2D.drawString("= Unexplored Obstacle", 790, 30);
+		
+		g2D.setColor(Color.black);
+		g2D.fillRect(760, 43, 20, 20);
+		g2D.setColor(Color.black);
+		g2D.drawString("= Unexplored Open Space", 790, 60);
+		
+		g2D.setColor(Color.blue);
+		g2D.fillRect(760, 73, 20, 20);
+		g2D.setColor(Color.black);
+		g2D.drawString("= Explored Obstacle", 790, 90);
+		
+		g2D.setColor(Color.black);
+		g2D.drawRect(760, 103, 20, 20);
+		g2D.setColor(Color.black);
+		g2D.drawString("= Explored Open Space", 790, 120);
+		
+		g2D.setColor(Color.gray);
+		g2D.fillRect(760, 133, 20, 20);
+		g2D.setColor(Color.black);
+		g2D.drawString("= Frontier Point", 790, 150);
+		
+		int[] xPoints = {780, 760, 760};
+		int[] yPoints = {173, 183, 163};
+		g2D.setColor(Color.cyan);
+		g2D.fillPolygon(xPoints, yPoints, 3);
+		g2D.setColor(Color.black);
+		g2D.drawString("= Robot", 790, 180);
+		
+		if(twoRobots)
+		{
+			g2D.setColor(Color.black);
+			g2D.drawString("Total Steps = " + (robot1.noOfSteps + robot2.noOfSteps), 760, 210);
+			g2D.setColor(Color.black);
+			g2D.drawString("Robot 1 Steps = " + robot1.noOfSteps, 760, 240);
+			g2D.setColor(Color.black);
+			g2D.drawString("Robot 2 Steps = " + robot2.noOfSteps, 760, 270);
+		}//if
+		else
+		{
+			g2D.setColor(Color.black);
+			g2D.drawString("Total Steps = " + (robot1.noOfSteps), 760, 210);
+			g2D.setColor(Color.black);
+			g2D.drawString("Robot 1 Steps = " + robot1.noOfSteps, 760, 240);
+		}//else
 	}//paint
 	
 	/**
@@ -194,18 +276,98 @@ public class Simulation extends JPanel
 	}//update 
 	
 	/**
-	 * This runs the simulation, it loops through the exploration algorithm until the exploration is complete
-	 * @param robotIn The robot doing the exploration
-	 * @return The number of steps the robot took to explore
+	 * Controls the robot using the frontier based algorithm
+	 * @param robotIn the robot to be controlled
 	 */
-	public int simulationLoop(Robot robotIn)
+	public void frontierAlgorithmLoop(Robot robotIn)
 	{
 		boolean loop = true;
 		int robotStartXCoord = (robotIn.getCoordinates().x)/pixelsPerSquare;
 		int robotStartYCoord = (robotIn.getCoordinates().y)/pixelsPerSquare;
 		searchedCoordinates.put(robotStartXCoord, new ConcurrentHashMap<Integer, PointStatusEnum>());
 		searchedCoordinates.get(robotStartXCoord).put(robotStartYCoord, PointStatusEnum.OPEN);
-		int noOfSteps = 0;
+		boolean frontObstacle;
+		boolean leftObstacle;
+		boolean rightObstacle;
+		boolean previouslySearchedFront;
+		boolean previouslySearchedLeft;
+		boolean previouslySearchedRight;
+		ArrayList<Point> currentPath = null;
+		Point nextPoint = null;
+		
+		while(loop)
+		{
+			int robotXCoord = (robotIn.getCoordinates().x)/pixelsPerSquare;
+			int robotYCoord = (robotIn.getCoordinates().y)/pixelsPerSquare;
+			
+			//Search area surrounding the robot (simulated ultrasonic sensors)
+			previouslySearchedFront = previouslySearchedFront(robotIn);
+			previouslySearchedLeft = previouslySearchedLeft(robotIn);
+			previouslySearchedRight = previouslySearchedRight(robotIn);
+			frontObstacle = obstacleInFront(robotIn);
+			leftObstacle = obstacleToLeft(robotIn);
+			rightObstacle = obstacleToRight(robotIn);
+			
+			if(nextPoint != null)//if robot has a next point to go to
+			{
+				if(nextStepToPoint(robotIn, nextPoint))//move a step towards the next point
+				{
+					//if point is reached then remove it
+					nextPoint = null;
+				}//if
+				
+				robotIn.noOfSteps ++;
+				
+				this.repaint();
+				
+				try
+				{
+					Thread.sleep(100);
+				}//try
+				catch (InterruptedException e)
+				{
+					e.printStackTrace();
+				}//catch
+			}//if
+			else if(currentPath != null)//if robot has a current mapped path to go along
+			{
+				//get the next point along that path
+				nextPoint = currentPath.get(currentPath.size()-1);
+				//remove that point from the path
+				currentPath.remove(currentPath.size()-1);
+				if(currentPath.isEmpty())
+				{
+					//if the path is now empty (has no more points) then remove it
+					currentPath = null;
+				}//if
+			}//else if
+			else//finds next closest unexplored point
+			{
+				Point closestUnexploredPoint = getClosestUnexploredPoint(new Point(robotXCoord, robotYCoord));
+				
+				if(closestUnexploredPoint == null)//if all points have been explored
+				{
+					loop = false;
+				}//if
+				else
+				{
+					currentPath = mapRouteToPoint(robotIn, closestUnexploredPoint);
+				}//else
+			}//else
+		}//while
+	}//frontierAlgorithmLoop
+	
+	/**
+	 * Controls a robot using My Proprietary Algorithm
+	 * @param robotIn the robot to be controlled
+	 */
+	public void proprietaryAlgorithmLoop(Robot robotIn)
+	{
+		boolean loop = true;
+		int robotStartXCoord = (robotIn.getCoordinates().x)/pixelsPerSquare;
+		int robotStartYCoord = (robotIn.getCoordinates().y)/pixelsPerSquare;
+		searchedCoordinates.put(robotStartXCoord, new ConcurrentHashMap<Integer, PointStatusEnum>());
+		searchedCoordinates.get(robotStartXCoord).put(robotStartYCoord, PointStatusEnum.OPEN);
 		boolean frontObstacle;
 		boolean leftObstacle;
 		boolean rightObstacle;
@@ -236,7 +398,7 @@ public class Simulation extends JPanel
 					nextPoint = null;
 				}//if
 				
-				noOfSteps ++;
+				robotIn.noOfSteps ++;
 				
 				this.repaint();
 				
@@ -260,9 +422,8 @@ public class Simulation extends JPanel
 					//if the path is now empty (has no more points) then remove it
 					currentPath = null;
 				}//if
-			}//if
-			//comment out
-			/*else if(!leftObstacle && !previouslySearchedLeft)//if robot can turn left then it does
+			}//else if
+			else if(!leftObstacle && !previouslySearchedLeft)//if robot can turn left then it does
 			{
 				if(robotIn.getDirection().equals(DirectionEnum.NORTH))
 				{
@@ -318,7 +479,7 @@ public class Simulation extends JPanel
 				{
 					nextPoint = new Point(robotXCoord, robotYCoord-1);
 				}//else
-			}//else if*/
+			}//else if
 			else//finds next closest unexplored point
 			{
 				Point closestUnexploredPoint = getClosestUnexploredPoint(new Point(robotXCoord, robotYCoord));
@@ -333,9 +494,7 @@ public class Simulation extends JPanel
 				}//else
 			}//else
 		}//while
-		
-		return noOfSteps;
-	}//simulationLoop
+	}//proprietaryAlgorithmLoop
 	
 	/**
 	 * Checks if the point in front of the robot has been searched previously
@@ -1274,10 +1433,9 @@ public class Simulation extends JPanel
 			}//for
 		}//for
 		
-		//comment out
 		//Allows the robots to tell each other which square they are going to next
 		//by setting it as an obstacle it makes sure the other robot won't try and search it as well
-		if(xCoordKey != -1 && yCoordKey != -1)
+		if(xCoordKey != -1 && yCoordKey != -1 && coordinated)
 		{
 			searchedCoordinates.get(xCoordKey).put(yCoordKey, PointStatusEnum.OBSTACLE);
 		}//if
@@ -1540,18 +1698,20 @@ public class Simulation extends JPanel
 	/**
 	 * A thread that loops through the simulation algorithm, 1 instance of this thread is required per robot
 	 * @author Paul Monk
-	 * @version 20/01/2014
+	 * @version 12/03/2014
 	 */
 	public class SimulationLoopThread implements Runnable
 	{
 		private Robot robot;
+		boolean proprietaryAlgorithm;
 		public int noOfSteps;
 		
 		/**
 		 * Sets up the thread
-		 * @param robotIn The robot this thread will controll
+		 * @param robotIn The robot this thread will control
+		 * @param proprietaryAlgorithmIn which algorithm the thread will run (true for proprietary, false for frontier)
 		 */
-		public SimulationLoopThread(Robot robotIn)
+		public SimulationLoopThread(Robot robotIn, boolean proprietaryAlgorithmIn)
 		{
 			robot = robotIn;
 		}//simulationLoopThread
@@ -1562,7 +1722,16 @@ public class Simulation extends JPanel
 		@Override
 		public void run()
 		{
-			noOfSteps = simulationLoop(robot);
+			if(proprietaryAlgorithm)
+			{
+				proprietaryAlgorithmLoop(robot);
+			}//if
+			else
+			{
+				frontierAlgorithmLoop(robot);
+			}//else
+			
+			noOfSteps = robot.noOfSteps;
 			endSimulation(robot, noOfSteps);
 		}//run
 	}//simulationLoopThread
