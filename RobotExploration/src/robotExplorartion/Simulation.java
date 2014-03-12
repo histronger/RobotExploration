@@ -767,13 +767,14 @@ public class Simulation extends JPanel
 		
 		if(robotIn.getDirection().equals(DirectionEnum.NORTH))
 		{
-			if(searchedCoordinates.containsKey(robotXCoord-1))//previously searched column
+			int xCoord = robotXCoord-1;
+			if(searchedCoordinates.containsKey(xCoord))//previously searched column
 			{
-				if(searchedCoordinates.get(robotXCoord-1).containsKey(robotYCoord))
+				if(!searchedCoordinates.get(xCoord).containsKey(robotYCoord))
 				{
 					//point doesn't exist yet
 				}//if
-				else if(searchedCoordinates.get(robotXCoord-1).get(robotYCoord) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
+				else if(searchedCoordinates.get(xCoord).get(robotYCoord)!= PointStatusEnum.UNEXPLORED)//previously searched coordinate
 				{
 					return true;
 				}//else if
@@ -781,29 +782,31 @@ public class Simulation extends JPanel
 			else//column hasn't been searched
 			{
 				//add a column to the coordinates list
-				searchedCoordinates.put(robotXCoord-1, new ConcurrentHashMap<Integer, PointStatusEnum>());
+				searchedCoordinates.put(xCoord, new ConcurrentHashMap<Integer, PointStatusEnum>());
 			}//else
 		}//if
 		else if(robotIn.getDirection().equals(DirectionEnum.EAST))
 		{	
-			if(searchedCoordinates.get(robotXCoord).containsKey(robotYCoord-1))
+			int yCoord = robotYCoord-1;
+			if(!searchedCoordinates.get(robotXCoord).containsKey(yCoord))
 			{
 				//point doesn't exist yet
 			}//if
-			else if(searchedCoordinates.get(robotXCoord).get(robotYCoord-1) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
+			else if(searchedCoordinates.get(robotXCoord).get(yCoord) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
 			{
 				return true;
 			}//else if
 		}//else if
 		else if(robotIn.getDirection().equals(DirectionEnum.SOUTH))
 		{	
-			if(searchedCoordinates.containsKey(robotXCoord+1))//previously searched column
+			int xCoord = robotXCoord+1;
+			if(searchedCoordinates.containsKey(xCoord))//previously searched column
 			{
-				if(searchedCoordinates.get(robotXCoord+1).containsKey(robotYCoord))
+				if(!searchedCoordinates.get(xCoord).containsKey(robotYCoord))
 				{
 					///point doesn't exist yet
 				}//if
-				else if(searchedCoordinates.get(robotXCoord+1).get(robotYCoord) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
+				else if(searchedCoordinates.get(xCoord).get(robotYCoord) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
 				{
 					return true;
 				}//else if
@@ -811,16 +814,17 @@ public class Simulation extends JPanel
 			else//column hasn't been searched
 			{
 				//add a column to the coordinates list
-				searchedCoordinates.put(robotXCoord+1, new ConcurrentHashMap<Integer, PointStatusEnum>());
+				searchedCoordinates.put(xCoord, new ConcurrentHashMap<Integer, PointStatusEnum>());
 			}//else
 		}//else if
 		else//facing west
 		{	
-			if(searchedCoordinates.get(robotXCoord).containsKey(robotYCoord+1))
+			int yCoord = robotYCoord+1;
+			if(!searchedCoordinates.get(robotXCoord).containsKey(yCoord))
 			{
 				//point doesn't exist yet
 			}//if
-			else if(searchedCoordinates.get(robotXCoord).get(robotYCoord+1) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
+			else if(searchedCoordinates.get(robotXCoord).get(yCoord) != PointStatusEnum.UNEXPLORED)//previously searched coordinate
 			{
 				return true;
 			}//else if
@@ -1028,7 +1032,7 @@ public class Simulation extends JPanel
 		{
 			if(searchedCoordinates.containsKey(robotXCoord+1))//previously searched column
 			{
-				if(searchedCoordinates.get(robotXCoord+1).containsKey(robotYCoord))
+				if(!searchedCoordinates.get(robotXCoord+1).containsKey(robotYCoord))
 				{
 					//point doesn't exist yet
 				}//if
@@ -1045,7 +1049,7 @@ public class Simulation extends JPanel
 		}//if
 		else if(robotIn.getDirection().equals(DirectionEnum.EAST))
 		{	
-			if(searchedCoordinates.get(robotXCoord).containsKey(robotYCoord+1))
+			if(!searchedCoordinates.get(robotXCoord).containsKey(robotYCoord+1))
 			{
 				//point doesn't exist yet
 			}//if
@@ -1058,7 +1062,7 @@ public class Simulation extends JPanel
 		{	
 			if(searchedCoordinates.containsKey(robotXCoord-1))//previously searched column
 			{
-				if(searchedCoordinates.get(robotXCoord-1).containsKey(robotYCoord))
+				if(!searchedCoordinates.get(robotXCoord-1).containsKey(robotYCoord))
 				{
 					//point doesn't exist yet
 				}//if
@@ -1075,7 +1079,7 @@ public class Simulation extends JPanel
 		}//else if
 		else//facing west
 		{	
-			if(searchedCoordinates.get(robotXCoord).containsKey(robotYCoord-1))
+			if(!searchedCoordinates.get(robotXCoord).containsKey(robotYCoord-1))
 			{
 				//point doesn't exist yet
 			}//if
@@ -1714,6 +1718,7 @@ public class Simulation extends JPanel
 		public SimulationLoopThread(Robot robotIn, boolean proprietaryAlgorithmIn)
 		{
 			robot = robotIn;
+			proprietaryAlgorithm = proprietaryAlgorithmIn;
 		}//simulationLoopThread
 		
 		/**
