@@ -7,7 +7,7 @@ import java.awt.*;
  * The robot is simulated to have 3 ultrasonic sensors (front, left and right hand sides) and
  * a wireless transceiver.
  * @author Paul Monk
- * @version 20/01/2014
+ * @version 12/03/2014
  */
 public class Robot
 {
@@ -15,6 +15,7 @@ public class Robot
 	private Point coordinates;
 	private int size;
 	private DirectionEnum direction;
+	public int noOfSteps;
 	
 	/**
 	 * Constructor, sets up a robot object using the information provided
@@ -29,6 +30,7 @@ public class Robot
 		coordinates = coordinatesIn;
 		size = sizeIn;
 		direction = directionIn;
+		noOfSteps = 0;
 	}//constructor
 	
 	/**
